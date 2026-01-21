@@ -6,7 +6,7 @@
   <title>YouTube Player</title>
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
-    #playerWrap { width:100%; height:100%; }
+    iframe { width:100%; height:100%; border:0; display:block; }
     .error {
       position:fixed; inset:0;
       padding:16px;
@@ -15,28 +15,11 @@
       color:#9bd0ff; background:#000;
     }
     a{ color:#9bd0ff; }
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 16px;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,.72);
-      color: #fff;
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-family: Arial, system-ui, -apple-system, Segoe UI, Roboto;
-      font-size: 13px;
-      display:none;
-      z-index: 9999;
-      user-select:none;
-      white-space: nowrap;
-    }
   </style>
 </head>
 <body>
-  <div id="playerWrap"></div>
+  <iframe id="ytFrame" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>
   <div class="error" id="err" style="display:none;"></div>
-  <div class="toast" id="toast"></div>
 
 <script>
   function getInt(v, d=0) {
@@ -66,15 +49,8 @@
     }
   }
 
+  const frame = document.getElementById("ytFrame");
   const errEl = document.getElementById("err");
-  const toastEl = document.getElementById("toast");
-
-  function toast(msg, ms=1500) {
-    toastEl.textContent = msg;
-    toastEl.style.display = "block";
-    clearTimeout(toastEl._t);
-    toastEl._t = setTimeout(() => toastEl.style.display = "none", ms);
-  }
 
   const params = new URLSearchParams(location.search);
 
@@ -91,26 +67,20 @@
   if (!videoId) {
     const raw = location.search.startsWith("?") ? location.search.slice(1) : "";
     if (raw.startsWith("http")) {
-      const onlyUrl = raw.split("&")[0];
+      // raw 예: https://youtu.be/xxx&rel=0^0^0
+      const onlyUrl = raw.split("&")[0]; // 첫번째 & 전까지만 URL로 취급
       videoId = extractIdFromUrl(onlyUrl);
     }
   }
 
-  // start/end/rel 파싱
+  // start/end/rel 파싱 (없으면 0)
   const start = Math.max(0, getInt(params.get("start"), 0));
   const end = Math.max(0, getInt(params.get("end"), 0));
   let rel = params.get("rel") ?? "0";
 
+  // ✅ 예전 rel=0^0^0 같은 값이면 0만 사용
   if (typeof rel === "string" && rel.includes("^")) rel = rel.split("^")[0];
   rel = (rel === "1") ? "1" : "0";
-
-  // ✅ 이어보기 옵션 (기본 ON)
-  // resume=0 을 주면 이어보기 끔
-  const resumeEnabled = (params.get("resume") ?? "1") !== "0";
-
-  // ✅ (옵션) 최초 음소거 파라미터 지원: mute=1 → 시작부터 무음
-  // (content.js postMessage가 주로 제어하지만, 안전장치로 둠)
-  const initialMuteParam = (params.get("mute") ?? "0") === "1";
 
   // 검증
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
@@ -126,172 +96,15 @@
 
   const safeEnd = (end > start) ? end : 0;
 
-  // =========================
-  // ✅ 이어보기 저장/복원 로직
-  // =========================
-  const STORAGE_KEY = `YT_RESUME_${videoId}`;
-
-  function loadResumeTime() {
-    if (!resumeEnabled) return 0;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return 0;
-      const obj = JSON.parse(raw);
-
-      const t = Number(obj?.t ?? 0);
-      if (!Number.isFinite(t) || t < 0) return 0;
-
-      return t;
-    } catch {
-      return 0;
-    }
-  }
-
-  function saveResumeTime(seconds) {
-    if (!resumeEnabled) return;
-    const t = Number(seconds);
-    if (!Number.isFinite(t) || t < 0) return;
-    if (t < 2) return;
-
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ t: t, ts: Date.now() }));
-    } catch {}
-  }
-
-  function clearResumeTime() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-  }
-
-  let resumeTime = loadResumeTime();
-
-  if (safeEnd && resumeTime >= safeEnd - 1) {
-    resumeTime = 0;
-    clearResumeTime();
-  }
-
-  let initialStart = start;
-  if (resumeEnabled && resumeTime > start + 1) {
-    initialStart = resumeTime;
-  }
-
-  // =========================
-  // ✅ 외부(content.js)에서 보내는 mute/unmute 메시지 처리
-  // =========================
-  let player = null;
-
-  // 현재 원하는 음소거 상태(플레이어 생성 전에도 받을 수 있게 저장)
-  let desiredMuted = initialMuteParam;
-
-  function applyMuteState() {
-    try {
-      if (!player) return;
-      if (desiredMuted) player.mute();
-      else player.unMute();
-    } catch {}
-  }
-
-  window.addEventListener("message", (event) => {
-    const data = event?.data;
-    if (!data || data.source !== "GYS") return;
-
-    if (data.type === "SET_MUTE") {
-      desiredMuted = !!data.muted;
-      applyMuteState();
-
-      // 디버그 토스트 (원하면 주석처리)
-      // toast(desiredMuted ? "🔇 음소거" : "🔊 음소거 해제", 800);
-    }
+  const embedParams = new URLSearchParams({
+    autoplay: "1",
+    playsinline: "1",
+    rel: rel,
+    start: String(start)
   });
+  if (safeEnd) embedParams.set("end", String(safeEnd));
 
-  // =========================
-  // ✅ YouTube IFrame API 로드
-  // =========================
-  const tag = document.createElement('script');
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(tag);
-
-  let saveTimer = null;
-  let didSeekResume = false;
-
-  // API가 준비되면 자동 호출됨
-  window.onYouTubeIframeAPIReady = function () {
-    player = new YT.Player('playerWrap', {
-      width: '100%',
-      height: '100%',
-      videoId: videoId,
-      playerVars: {
-        autoplay: 1,
-        playsinline: 1,
-        rel: rel,
-        start: Math.floor(initialStart),
-        ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
-      },
-      events: {
-        onReady: onReady,
-        onStateChange: onStateChange,
-        onError: onError
-      }
-    });
-  };
-
-  function onReady() {
-    // ✅ 플레이어 준비되면, 원하는 mute 상태 적용
-    applyMuteState();
-
-    // start가 무시되는 환경 보정
-    if (resumeEnabled && !didSeekResume && initialStart > 0) {
-      try {
-        player.seekTo(initialStart, true);
-        didSeekResume = true;
-        toast(`이어보기: ${Math.floor(initialStart)}초부터 재생`);
-      } catch {}
-    }
-
-    // 4초마다 현재시간 저장
-    saveTimer = setInterval(() => {
-      try {
-        if (!player) return;
-        const state = player.getPlayerState();
-        if (state === 1 || state === 2 || state === 3) {
-          const t = player.getCurrentTime();
-          saveResumeTime(t);
-        }
-      } catch {}
-    }, 4000);
-
-    // 탭 숨김/종료 시 한번 더 저장
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        try { saveResumeTime(player.getCurrentTime()); } catch {}
-      }
-    });
-
-    window.addEventListener("beforeunload", () => {
-      try { saveResumeTime(player.getCurrentTime()); } catch {}
-    });
-  }
-
-  function onStateChange(e) {
-    try {
-      // ✅ 상태 변동 때 mute가 풀리는 경우가 있어서 한 번 더 보정
-      applyMuteState();
-
-      if (e.data === YT.PlayerState.ENDED) {
-        clearResumeTime();
-      }
-      if (e.data === YT.PlayerState.PAUSED) {
-        saveResumeTime(player.getCurrentTime());
-      }
-    } catch {}
-  }
-
-  function onError(e) {
-    errEl.style.display = "block";
-    errEl.innerHTML =
-      "이 영상은 임베드로 재생이 제한되었거나 오류가 발생했습니다.<br><br>" +
-      "YouTube 오류 코드: <b>" + (e?.data ?? "unknown") + "</b><br><br>" +
-      "가능하면 원본 YouTube 페이지에서 재생해야 합니다.";
-  }
+  frame.src = `https://www.youtube.com/embed/${videoId}?${embedParams.toString()}`;
 </script>
 </body>
 </html>
