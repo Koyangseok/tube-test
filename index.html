@@ -1,175 +1,136 @@
 <!DOCTYPE html>
-<html><head>
-<meta charset="utf-8"/>
-<meta content="Adobe_Animate_CC" name="authoring-tool"/>
-<title>youm</title>
-<!-- write your code here -->
-<script>document.addEventListener('keydown', function (event) { if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && event.key === 'I')) { event.preventDefault(); } });
-  document.addEventListener('contextmenu', function (event) {event.preventDefault(); }); </script><script>function scriptLoadError() { window.stop(); }</script> <script onerror="scriptLoadError()" src="assets/html5/you/kjs_749c7116c6.js"></script>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>유튜브 영상 플레이어</title>
+
 <style>
-  #animation_container {
-	position:absolute;
-	margin:auto;
-	left:0;right:0;
-  }
-</style>
-<script src="assets/1.0.0/createjs.min_ac7083ec62.js"></script>
-<script src="assets/html5/you/youm_ee14c5448b.js"></script>
-<script>
-var canvas, stage, exportRoot, anim_container, dom_overlay_container, fnStartAnimation;
-function init() {
-	canvas = document.getElementById("canvas");
-	anim_container = document.getElementById("animation_container");
-	dom_overlay_container = document.getElementById("dom_overlay_container");
-	var comp=AdobeAn.getComposition("6EA899EF6325C34AB2EFEE2444EC4EAB");
-	var lib=comp.getLibrary();
-	handleComplete({},comp);
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  margin: 0;
+  padding: 40px;
 }
-function handleComplete(evt,comp) {
-	//This function is always called, irrespective of the content. You can use the variable "stage" after it is created in token create_stage.
-	var lib=comp.getLibrary();
-	var ss=comp.getSpriteSheet();
-	exportRoot = new lib.유튜브플레이어자동재생3_1완성1_1_제작만();
-	stage = new lib.Stage(canvas);
-	stage.enableMouseOver();	
-	//Registers the "tick" event listener.
-	fnStartAnimation = function() {
-		stage.addChild(exportRoot);
-		createjs.Ticker.framerate = lib.properties.fps;
-		createjs.Ticker.addEventListener("tick", stage);
-	}	    
-	//Code to support hidpi screens and responsive scaling.
-	AdobeAn.makeResponsive(false,'both',false,1,[canvas,anim_container,dom_overlay_container]);	
-	AdobeAn.compositionLoaded(lib.properties.id);
-	fnStartAnimation();
+.container {
+  max-width: 800px;
+  margin: auto;
+  background: #fff;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.1);
+}
+h1 {
+  text-align: center;
+}
+.row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+input {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
+}
+button {
+  padding: 10px 16px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+}
+.load {
+  background: #ff0000;
+  color: #fff;
+}
+.save {
+  background: #4CAF50;
+  color: #fff;
+}
+.copy {
+  background: #2196F3;
+  color: #fff;
+}
+.preview {
+  background: #9C27B0;
+  color: #fff;
+}
+.result {
+  margin-top: 15px;
+  word-break: break-all;
+}
+iframe {
+  width: 100%;
+  height: 450px;
+  margin-top: 20px;
+  border: none;
+  display: none;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>유튜브 영상 플레이어</h1>
+
+  <div class="row">
+    <input id="ytUrl" placeholder="유튜브 URL 입력">
+    <button class="load" onclick="makeLink()">불러오기</button>
+  </div>
+
+  <div class="row">
+    <input id="start" placeholder="시작 시간 (초)" value="0">
+    <input id="end" placeholder="종료 시간 (초)" value="0">
+    <button class="save" onclick="makeLink()">보관하기</button>
+  </div>
+
+  <div class="row">
+    <button class="copy" onclick="copyLink()">링크복사</button>
+    <button class="preview" onclick="preview()">미리보기</button>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <iframe id="previewFrame"></iframe>
+</div>
+
+<script>
+const BASE = "https://youtube-test-gilt.vercel.app/youp.html";
+let lastLink = "";
+
+function makeLink() {
+  const url = document.getElementById("ytUrl").value.trim();
+  if (!url.includes("youtu")) {
+    alert("올바른 유튜브 URL을 입력하세요");
+    return;
+  }
+
+  const start = parseInt(document.getElementById("start").value || "0", 10);
+  const end = parseInt(document.getElementById("end").value || "0", 10);
+
+  const params = new URLSearchParams({
+    url: url,
+    start: start,
+    end: end,
+    rel: 0
+  });
+
+  lastLink = `${BASE}?${params.toString()}`;
+  document.getElementById("result").innerText = lastLink;
+}
+
+function copyLink() {
+  if (!lastLink) return;
+  navigator.clipboard.writeText(lastLink);
+  alert("링크가 복사되었습니다");
+}
+
+function preview() {
+  if (!lastLink) return;
+  const iframe = document.getElementById("previewFrame");
+  iframe.src = lastLink;
+  iframe.style.display = "block";
 }
 </script>
-<!-- write your code here -->
-<style>
-		        .youtube-container {
-		            font-family: 'Arial', sans-serif;
-		            max-width: 800px;
-		            margin: 0 auto;
-		            padding: 20px;
-		            background-color: white;
-		            border-radius: 8px;
-		            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-		        }
-		        .youtube-title {
-		            color: #333333;
-		            text-align: center;
-		            margin-bottom: 20px;
-		            font-size: 24px;
-		        }
-		        .youtube-input-group {
-		            display: flex;
-		            margin-bottom: 20px;
-		        }
-		        .youtube-input {
-		            flex: 1;
-		            padding: 10px;
-		            border: 1px solid #ddd;
-		            border-radius: 4px 0 0 4px;
-		            font-size: 16px;
-		        }
-		        .youtube-button {
-		            padding: 10px 15px;
-		            background-color: #ff0000;
-		            color: white;
-		            border: none;
-		            border-radius: 0 4px 4px 0;
-		            cursor: pointer;
-		            font-size: 16px;
-		        }
-		        .youtube-button:hover {
-		            background-color: #cc0000;
-		        }
-		        .youtube-video-container {
-		            position: relative;
-		            padding-bottom: 56.25%;
-		            height: 0;
-		            overflow: hidden;
-		            margin-top: 20px;
-		        }
-		        .youtube-video-container iframe {
-		            position: absolute;
-		            top: 0;
-		            left: 0;
-		            width: 100%;
-		            height: 100%;
-		            border: none;
-		        }
-		        .youtube-error {
-		            font-size: 14px;
-		            color: #0000ff;
-		            margin-top: 10px;
-		            display: none;
-		        }
-		        .youtube-time-inputs {
-		            display: flex;
-		            gap: 10px;
-		            margin: 10px 0;
-		            align-items: center;
-		            flex-wrap: wrap;
-		        }
-		        .youtube-time-input {
-		            width: 80px;
-		            padding: 8px;
-		            border: 1px solid #ddd;
-		            border-radius: 4px;
-		        }
-		        .youtube-time-label {
-		            font-size: 14px;
-		        }
-		        .youtube-save-button {
-		            padding: 8px 15px;
-		            background-color: #4CAF50;
-		            color: white;
-		            border: none;
-		            border-radius: 4px;
-		            cursor: pointer;
-		            font-size: 14px;
-		            margin-left: 10px;
-		        }
-		        .youtube-save-button:hover {
-		            background-color: #45a049;
-		        }
-		        .youtube-copy-button {
-		            padding: 3px 10px;
-		            background-color: #2196F3;
-		            color: white;
-		            border: none;
-		            border-radius: 4px;
-		            cursor: pointer;
-		            font-size: 12px;
-		            margin-left: 10px;
-		        }
-		        .youtube-copy-button:hover {
-		            background-color: #0b7dda;
-		        }
-		        .youtube-preview-button {
-		            padding: 3px 10px;
-		            background-color: #9C27B0;
-		            color: white;
-		            border: none;
-		            border-radius: 4px;
-		            cursor: pointer;
-		            font-size: 12px;
-		            margin-left: 5px;
-		        }
-		        .youtube-preview-button:hover {
-		            background-color: #7B1FA2;
-		        }
-		        .youtube-link-container {
-		            display: flex;
-		            align-items: center;
-		            margin-top: 10px;
-		        }
-		    </style></head>
-<body onload="init();" style="margin:0px;">
-<div id="animation_container" style="background-color:rgba(255, 255, 255, 1.00); width:900px; height:20px">
-<canvas height="20" id="canvas" style="position: absolute; display: block; background-color: rgb(255, 255, 255); width: 900px; height: 20px;" width="900"></canvas>
-<div id="dom_overlay_container" style="pointer-events:none; overflow:hidden; width:900px; height:20px; position: absolute; left: 0px; top: 0px; display: block;">
-</div>
-</div>
-<div class="youtube-container"><h1 class="youtube-title">유튜브 영상 플레이어</h1><div class="youtube-input-group"><input class="youtube-input" placeholder="유튜브 URL을 입력하세요" type="text"/><button class="youtube-button">불러오기</button></div><div class="youtube-time-inputs"><span class="youtube-time-label">시작 시간:</span><input class="youtube-time-input" placeholder="1:20 or 80" type="text"/><span class="youtube-time-label">종료 시간:</span><input class="youtube-time-input" placeholder="1:20 or 80" type="text"/><button class="youtube-save-button">보관하기</button></div><div class="youtube-link-container"><div class="youtube-error" style="flex: 1 1 0%; display: none;">올바른 유튜브 URL을 입력해주세요.</div><button class="youtube-copy-button" style="display: none;">링크복사하기</button><button class="youtube-preview-button" style="display: none;">미리보기</button></div><div class="youtube-video-container" style="display: none;"><iframe allowfullscreen=""></iframe></div></div></body></html>
+</body>
+</html>
