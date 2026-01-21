@@ -1,78 +1,182 @@
-<!DOCTYPE html>
-<!-- saved from url=(0048)https://sciencej1.cafe24.com/html5/you/youp.html -->
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>YouTube Player</title>
 
-<meta name="authoring-tool" content="Adobe_Animate_CC">
-<title>youp</title>
-<!-- write your code here -->
-<script>document.addEventListener('keydown', function (event) { if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && event.key === 'I')) { event.preventDefault(); } });
-  document.addEventListener('contextmenu', function (event) {event.preventDefault(); }); </script><script>function scriptLoadError() { window.stop(); }</script> <script src="./youp_files/kjs.js.다운로드" onerror="scriptLoadError()"></script>
-<style>
-  #animation_container {
-	position:absolute;
-	margin:auto;
-	left:0;right:0;
-  }
-</style>
-<script src="./youp_files/createjs.min.js.다운로드"></script>
-<script src="./youp_files/youp.js.다운로드"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, system-ui, -apple-system, Segoe UI, Roboto;
+      color: #fff;
+    }
+
+    .topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(6px);
+      box-sizing: border-box;
+    }
+
+    .meta {
+      flex: 1;
+      font-size: 13px;
+      color: #ddd;
+      word-break: break-all;
+    }
+
+    .btn {
+      border: 0;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn:hover { background: #333; }
+
+    .player {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .error {
+      padding: 70px 14px 14px;
+      font-size: 14px;
+      color: #9bd0ff;
+      line-height: 1.5;
+    }
+
+    a { color: #9bd0ff; }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div class="meta" id="meta">로딩중...</div>
+    <button class="btn" id="homeBtn">메인으로</button>
+    <button class="btn" id="copyBtn">현재링크 복사</button>
+  </div>
+
+  <div class="player" id="playerBox" style="display:none;">
+    <iframe id="ytFrame" allowfullscreen></iframe>
+  </div>
+
+  <div class="error" id="err" style="display:none;"></div>
+
 <script>
-var canvas, stage, exportRoot, anim_container, dom_overlay_container, fnStartAnimation;
-function init() {
-	canvas = document.getElementById("canvas");
-	anim_container = document.getElementById("animation_container");
-	dom_overlay_container = document.getElementById("dom_overlay_container");
-	var comp=AdobeAn.getComposition("6EA899EF6325C34AB2EFEE2444EC4EAB");
-	var lib=comp.getLibrary();
-	handleComplete({},comp);
-}
-function handleComplete(evt,comp) {
-	//This function is always called, irrespective of the content. You can use the variable "stage" after it is created in token create_stage.
-	var lib=comp.getLibrary();
-	var ss=comp.getSpriteSheet();
-	exportRoot = new lib.유튜브플레이어자동재생3_1완성_실행만1_1();
-	stage = new lib.Stage(canvas);
-	stage.enableMouseOver();	
-	//Registers the "tick" event listener.
-	fnStartAnimation = function() {
-		stage.addChild(exportRoot);
-		createjs.Ticker.framerate = lib.properties.fps;
-		createjs.Ticker.addEventListener("tick", stage);
-	}	    
-	//Code to support hidpi screens and responsive scaling.
-	AdobeAn.makeResponsive(false,'both',false,1,[canvas,anim_container,dom_overlay_container]);	
-	AdobeAn.compositionLoaded(lib.properties.id);
-	fnStartAnimation();
-}
-</script>
-<!-- write your code here -->
-<style>
-		        body, html { 
-		            margin: 0; 
-		            padding: 0; 
-		            height: 100%; 
-		            overflow: hidden; 
-		            background-color: #000; /* 배경을 검은색으로 */
-		        }
-		        .youtube-video-container {
-		            position: relative;
-		            width: 100vw; /* 뷰포트 너비 100% */
-		            height: 100vh; /* 뷰포트 높이 100% */
-		        }
-		        .youtube-video-container iframe {
-		            position: absolute;
-		            top: 0;
-		            left: 0;
-		            width: 100%;
-		            height: 100%;
-		            border: none; /* 테두리 없음 */
-		        }
-		    </style></head>
-<body onload="init();" style="margin:0px;">
-	<div id="animation_container" style="background-color:rgba(255, 255, 255, 1.00); width:900px; height:20px">
-		<canvas id="canvas" width="900" height="20" style="position: absolute; display: block; background-color: rgb(255, 255, 255); width: 900px; height: 20px;"></canvas>
-		<div id="dom_overlay_container" style="pointer-events:none; overflow:hidden; width:900px; height:20px; position: absolute; left: 0px; top: 0px; display: block;">
-		</div>
-	</div>
+  function getInt(v, d = 0) {
+    const n = parseInt(v ?? "", 10);
+    return Number.isFinite(n) ? n : d;
+  }
 
-<div class="youtube-video-container"><iframe allowfullscreen="" src="./youp_files/saved_resource.html"></iframe></div></body></html>
+  // ✅ 파라미터 읽기
+  // 지원 형태 1) youp.html?v=영상ID&start=0&end=0&rel=0   (추천)
+  // 지원 형태 2) youp.html?url=https://youtu.be/영상ID...   (예전 방식 호환)
+  const params = new URLSearchParams(location.search);
+
+  let videoId = params.get("v");
+  const urlParam = params.get("url");
+
+  // url 파라미터만 온 경우(예전 링크) -> ID 추출
+  if (!videoId && urlParam) {
+    try {
+      const u = new URL(urlParam);
+      if (u.hostname.includes("youtu.be")) {
+        videoId = u.pathname.split("/").filter(Boolean)[0];
+      } else {
+        videoId = u.searchParams.get("v");
+        if (!videoId) {
+          const shorts = u.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+          if (shorts) videoId = shorts[1];
+        }
+      }
+    } catch (e) {}
+  }
+
+  const start = Math.max(0, getInt(params.get("start"), 0));
+  const end = Math.max(0, getInt(params.get("end"), 0));
+  const rel = (params.get("rel") === "1") ? "1" : "0";
+
+  const metaEl = document.getElementById("meta");
+  const errEl = document.getElementById("err");
+  const playerBox = document.getElementById("playerBox");
+  const frame = document.getElementById("ytFrame");
+
+  document.getElementById("homeBtn").addEventListener("click", () => {
+    location.href = "/";
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    const link = location.href;
+    try {
+      await navigator.clipboard.writeText(link);
+      alert("현재 링크가 복사되었습니다.");
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      alert("현재 링크가 복사되었습니다.");
+    }
+  });
+
+  // ✅ 유효성 검사
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    metaEl.textContent = "오류";
+    errEl.style.display = "block";
+    errEl.innerHTML =
+      "영상 정보가 없습니다.<br><br>" +
+      "아래처럼 접속해야 합니다:<br>" +
+      "<b>/youp.html?v=영상ID&start=0&end=0&rel=0</b><br><br>" +
+      "예시:<br>" +
+      `<a href="/youp.html?v=5wwRM3CWj-g&start=0&end=0&rel=0">/youp.html?v=5wwRM3CWj-g&start=0&end=0&rel=0</a>`;
+    throw new Error("Invalid video id");
+  }
+
+  // end가 start보다 작거나 같으면 end는 무시
+  const safeEnd = (end > start) ? end : 0;
+
+  // ✅ embed URL 생성
+  const embedParams = new URLSearchParams({
+    autoplay: "1",
+    rel: rel,
+    start: String(start),
+    playsinline: "1"
+  });
+  if (safeEnd) embedParams.set("end", String(safeEnd));
+
+  const src = `https://www.youtube.com/embed/${videoId}?${embedParams.toString()}`;
+
+  metaEl.textContent = `v=${videoId} / start=${start}s / end=${safeEnd ? safeEnd + "s" : "없음"} / rel=${rel}`;
+  frame.src = src;
+  playerBox.style.display = "block";
+</script>
+</body>
+</html>
