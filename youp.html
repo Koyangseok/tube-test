@@ -78,16 +78,13 @@
 
   const params = new URLSearchParams(location.search);
 
-  // ✅ 새 방식 (추천)
   let videoId = params.get("v");
 
-  // ✅ 예전 방식1: ?url=https://...
   const urlParam = params.get("url");
   if (!videoId && urlParam) {
     videoId = extractIdFromUrl(urlParam);
   }
 
-  // ✅ 예전 방식2: ?https://youtu.be/... (키=값 없이 붙는 형식)
   if (!videoId) {
     const raw = location.search.startsWith("?") ? location.search.slice(1) : "";
     if (raw.startsWith("http")) {
@@ -96,7 +93,6 @@
     }
   }
 
-  // start/end/rel 파싱
   const start = Math.max(0, getInt(params.get("start"), 0));
   const end = Math.max(0, getInt(params.get("end"), 0));
   let rel = params.get("rel") ?? "0";
@@ -104,11 +100,8 @@
   if (typeof rel === "string" && rel.includes("^")) rel = rel.split("^")[0];
   rel = (rel === "1") ? "1" : "0";
 
-  // ✅ 이어보기 옵션 (기본 ON)
-  // resume=0 을 주면 이어보기 끔
   const resumeEnabled = (params.get("resume") ?? "1") !== "0";
 
-  // 검증
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
     errEl.style.display = "block";
     errEl.innerHTML =
@@ -134,7 +127,6 @@
       if (!raw) return 0;
       const obj = JSON.parse(raw);
 
-      // obj = { t: seconds, ts: savedAt }
       const t = Number(obj?.t ?? 0);
       if (!Number.isFinite(t) || t < 0) return 0;
       return t;
@@ -143,7 +135,6 @@
     }
   }
 
-  // ✅ 더 촘촘 + 중복 저장 방지
   let lastSavedSec = 0;
 
   function saveResumeTime(seconds) {
@@ -152,15 +143,22 @@
     const t = Math.floor(Number(seconds));
     if (!Number.isFinite(t) || t < 0) return;
 
-    // 너무 초반(예: 0~2초)은 저장 의미 없어서 무시
     if (t < 2) return;
 
-    // ✅ 같은 값 너무 자주 저장 방지
     if (Math.abs(t - lastSavedSec) < 1) return;
     lastSavedSec = t;
 
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ t: t, ts: Date.now() }));
+      
+      // ✅ AndroidBridge로도 전송 (inject.js가 받을 수 있게)
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: "GYS_TIME",
+          videoId: videoId,
+          time: t
+        }, "*");
+      }
     } catch {}
   }
 
@@ -168,20 +166,120 @@
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }
 
-  // 저장된 이어보기 시간 불러오기
   let resumeTime = loadResumeTime();
 
-  // ✅ end가 있는 경우, end 범위 밖이면 무시
   if (safeEnd && resumeTime >= safeEnd - 1) {
     resumeTime = 0;
     clearResumeTime();
   }
 
-  // ✅ start가 있는 경우, resumeTime이 start보다 작으면 start 우선
   let initialStart = start;
   if (resumeEnabled && resumeTime > start + 1) {
     initialStart = resumeTime;
   }
+
+  // =========================
+  // ✅ 백그라운드 재생 유지 로직
+  // =========================
+  let isPageHidden = false;
+  let wasPlayingBeforeHide = false;
+  let backgroundKeepAliveTimer = null;
+
+  // ✅ Page Visibility API로 백그라운드 감지
+  document.addEventListener("visibilitychange", () => {
+    isPageHidden = document.hidden;
+    
+    if (isPageHidden) {
+      // 백그라운드로 갔을 때
+      try {
+        if (player && player.getPlayerState) {
+          const state = player.getPlayerState();
+          wasPlayingBeforeHide = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+          
+          // 현재 시간 저장
+          saveResumeTime(player.getCurrentTime());
+          
+          // ✅ 백그라운드에서도 재생 유지 시도
+          if (wasPlayingBeforeHide) {
+            startBackgroundKeepAlive();
+          }
+        }
+      } catch (e) {
+        console.log("visibility error:", e);
+      }
+    } else {
+      // 포그라운드로 돌아왔을 때
+      stopBackgroundKeepAlive();
+      
+      try {
+        if (player && wasPlayingBeforeHide) {
+          // 재생이 멈췄다면 다시 시작
+          const state = player.getPlayerState();
+          if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
+            player.playVideo();
+          }
+        }
+      } catch (e) {
+        console.log("resume error:", e);
+      }
+    }
+  });
+
+  // ✅ 백그라운드에서 플레이어 상태 유지
+  function startBackgroundKeepAlive() {
+    stopBackgroundKeepAlive();
+    
+    backgroundKeepAliveTimer = setInterval(() => {
+      try {
+        if (!player || !player.getPlayerState) return;
+        
+        const state = player.getPlayerState();
+        
+        // 일시정지 상태면 다시 재생 시도
+        if (state === YT.PlayerState.PAUSED) {
+          player.playVideo();
+        }
+        
+        // 현재 시간 저장
+        if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
+          saveResumeTime(player.getCurrentTime());
+        }
+      } catch (e) {
+        console.log("keepalive error:", e);
+      }
+    }, 1000); // 1초마다 체크
+  }
+
+  function stopBackgroundKeepAlive() {
+    if (backgroundKeepAliveTimer) {
+      clearInterval(backgroundKeepAliveTimer);
+      backgroundKeepAliveTimer = null;
+    }
+  }
+
+  // ✅ pagehide/beforeunload에서도 재생 상태 유지 시도
+  window.addEventListener("pagehide", (e) => {
+    try {
+      if (player) {
+        saveResumeTime(player.getCurrentTime());
+        
+        // 재생 중이었다면 계속 재생 시도
+        const state = player.getPlayerState();
+        if (state === YT.PlayerState.PLAYING) {
+          // pagehide에서는 playVideo() 호출이 소용없지만 시도는 해봄
+          e.preventDefault();
+        }
+      }
+    } catch {}
+  });
+
+  window.addEventListener("beforeunload", () => {
+    try {
+      if (player) {
+        saveResumeTime(player.getCurrentTime());
+      }
+    } catch {}
+  });
 
   // =========================
   // ✅ YouTube IFrame API 로드
@@ -194,14 +292,12 @@
   let saveTimer = null;
   let didSeekResume = false;
 
-  // ✅ 이어보기 SEEK를 더 빠르게 확정 적용 (Ready + 상태변화에서도 재시도)
   function fastApplyResumeSeek() {
     if (!resumeEnabled) return;
     if (didSeekResume) return;
     if (initialStart <= 0) return;
 
     try {
-      // ✅ duration이 잡혀야 seek가 안정적임
       const dur = player?.getDuration?.() ?? 0;
       if (dur > 0) {
         player.seekTo(initialStart, true);
@@ -211,7 +307,6 @@
     } catch {}
   }
 
-  // API가 준비되면 자동 호출됨
   window.onYouTubeIframeAPIReady = function () {
     player = new YT.Player('playerWrap', {
       width: '100%',
@@ -222,6 +317,10 @@
         playsinline: 1,
         rel: rel,
         start: Math.floor(initialStart),
+        controls: 1,
+        disablekb: 0,
+        fs: 1,
+        modestbranding: 1,
         ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
       },
       events: {
@@ -233,69 +332,75 @@
   };
 
   function onReady() {
-    // ✅ onReady 순간 바로 이어보기 시도
     fastApplyResumeSeek();
 
-    // ✅ 일부 환경에서 ready 직후 seek 씹히는 경우 보정
     setTimeout(fastApplyResumeSeek, 200);
     setTimeout(fastApplyResumeSeek, 600);
 
-    // ✅ 1.5초마다 현재시간 저장 (더 정확하게 이어보기)
+    // ✅ 1.5초마다 현재시간 저장
     saveTimer = setInterval(() => {
       try {
         if (!player) return;
         const state = player.getPlayerState();
-        // 재생중(1) / 일시정지(2) / 버퍼링(3) 정도일 때만 저장
+        
         if (state === 1 || state === 2 || state === 3) {
           saveResumeTime(player.getCurrentTime());
         }
       } catch {}
     }, 1500);
-
-    // 탭 숨김/종료 시 한번 더 저장
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        try { saveResumeTime(player.getCurrentTime()); } catch {}
-      }
-    });
-
-    window.addEventListener("beforeunload", () => {
-      try { saveResumeTime(player.getCurrentTime()); } catch {}
-    });
-
-    // ✅ 모바일/웹뷰에서 beforeunload가 안먹는 경우 대비
-    window.addEventListener("pagehide", () => {
-      try { saveResumeTime(player.getCurrentTime()); } catch {}
-    });
   }
 
   function onStateChange(e) {
     try {
-      // ✅ 재생 시작 / 버퍼링 순간에도 이어보기 seek 재확정
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
         fastApplyResumeSeek();
+        wasPlayingBeforeHide = true;
       }
 
-      // 영상 끝남(0) → 이어보기 기록 삭제
       if (e.data === YT.PlayerState.ENDED) {
         clearResumeTime();
+        wasPlayingBeforeHide = false;
       }
 
-      // 일시정지(2) → 즉시 저장
       if (e.data === YT.PlayerState.PAUSED) {
         saveResumeTime(player.getCurrentTime());
+        
+        // ✅ 백그라운드에서 일시정지됐다면 다시 재생 시도
+        if (isPageHidden && wasPlayingBeforeHide) {
+          setTimeout(() => {
+            try {
+              if (player && player.getPlayerState() === YT.PlayerState.PAUSED) {
+                player.playVideo();
+              }
+            } catch {}
+          }, 100);
+        }
       }
     } catch {}
   }
 
   function onError(e) {
-    // 임베드 제한 영상/차단 등
     errEl.style.display = "block";
     errEl.innerHTML =
       "이 영상은 임베드로 재생이 제한되었거나 오류가 발생했습니다.<br><br>" +
       "YouTube 오류 코드: <b>" + (e?.data ?? "unknown") + "</b><br><br>" +
       "가능하면 원본 YouTube 페이지에서 재생해야 합니다.";
   }
+
+  // ✅ 오디오 컨텍스트 유지 (일부 브라우저에서 백그라운드 오디오 차단 방지)
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      const audioCtx = new AudioContext();
+      
+      // 사용자 인터랙션 후 resume (자동재생 정책 우회)
+      document.addEventListener('click', () => {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }, { once: true });
+    }
+  } catch {}
 </script>
 </body>
 </html>
