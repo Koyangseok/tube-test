@@ -64,17 +64,21 @@
     try {
       const u = new URL(urlStr);
 
+      // youtu.be/ID
       if (u.hostname.includes("youtu.be")) {
         const id = u.pathname.split("/").filter(Boolean)[0];
         return id || null;
       }
 
+      // watch?v=ID
       const v = u.searchParams.get("v");
       if (v) return v;
 
+      // /shorts/ID
       const shorts = u.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
       if (shorts) return shorts[1];
 
+      // /embed/ID
       const embed = u.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
       if (embed) return embed[1];
 
@@ -99,11 +103,13 @@
 
   let videoId = params.get("v");
 
+  // ?url=https://youtu.be/... 지원
   const urlParam = params.get("url");
   if (!videoId && urlParam) {
     videoId = extractIdFromUrl(urlParam);
   }
 
+  // 예전 방식: ?https://youtu.be/ID
   if (!videoId) {
     const raw = location.search.startsWith("?") ? location.search.slice(1) : "";
     if (raw.startsWith("http")) {
@@ -120,10 +126,6 @@
   rel = (rel === "1") ? "1" : "0";
 
   const resumeEnabled = (params.get("resume") ?? "1") !== "0";
-
-  // ✅ 최고화질 유도 값(원하면 url에 &vq=hd1080 같은 식으로 바꿀 수 있음)
-  // 가능한 값 예시: highres, hd1080, hd720, large, medium, small
-  const preferredVQ = (params.get("vq") ?? "highres").toLowerCase();
 
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
     errEl.style.display = "block";
@@ -164,6 +166,8 @@
 
     const t = Math.floor(Number(seconds));
     if (!Number.isFinite(t) || t < 0) return;
+
+    // 너무 초반 값은 저장 안함
     if (t < 2) return;
     if (Math.abs(t - lastSavedSec) < 1) return;
     lastSavedSec = t;
@@ -172,7 +176,12 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ t, ts: Date.now() }));
     } catch {}
 
-    postToParent({ type: "GYS_TIME", videoId, time: t });
+    // ✅ 부모(content.js)로 현재 시간 전송
+    postToParent({
+      type: "GYS_TIME",
+      videoId,
+      time: t
+    });
   }
 
   function clearResumeTime() {
@@ -181,11 +190,13 @@
 
   let resumeTime = loadResumeTime();
 
+  // end 구간이면 이어보기 초기화
   if (safeEnd && resumeTime >= safeEnd - 1) {
     resumeTime = 0;
     clearResumeTime();
   }
 
+  // 실제 시작점 결정
   let initialStart = start;
   if (resumeEnabled && resumeTime > start + 1) {
     initialStart = resumeTime;
@@ -218,40 +229,6 @@
   }
 
   // =========================
-  // ✅ 최고화질 유도 로직
-  // =========================
-  function tryForceBestQuality() {
-    try {
-      if (!player) return;
-
-      // 1) 가장 공격적인 값 먼저 시도
-      player.setPlaybackQuality?.("highres");
-
-      // 2) 사용자가 vq 파라미터로 지정한 값도 시도
-      player.setPlaybackQuality?.(preferredVQ);
-
-      // 3) 실제 적용된 값 확인(가능한 경우)
-      const q = player.getPlaybackQuality?.();
-      if (q) {
-        // 품질이 낮게 잡혀있으면 한번 더 highres로 밀어올림
-        if (q === "small" || q === "medium" || q === "large") {
-          player.setPlaybackQuality?.("highres");
-        }
-      }
-    } catch {}
-  }
-
-  function burstForceQuality() {
-    // ✅ 재생 초반에 몇 번 더 밀어주면 올라갈 확률이 큼
-    let n = 0;
-    const t = setInterval(() => {
-      n++;
-      tryForceBestQuality();
-      if (n >= 10) clearInterval(t); // 약 5초 정도만 시도
-    }, 500);
-  }
-
-  // =========================
   // ✅ 백그라운드 유지 시도
   // =========================
   let isPageHidden = false;
@@ -264,12 +241,15 @@
     backgroundKeepAliveTimer = setInterval(() => {
       try {
         if (!player || !player.getPlayerState) return;
+
         const state = player.getPlayerState();
 
+        // 일시정지면 재생 시도
         if (state === YT.PlayerState.PAUSED) {
           player.playVideo();
         }
 
+        // 재생 중이면 시간 저장
         if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
           saveResumeTime(player.getCurrentTime());
         }
@@ -292,12 +272,19 @@
         if (player && player.getPlayerState) {
           const state = player.getPlayerState();
           wasPlayingBeforeHide = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+
+          // 현재 시간 저장
           saveResumeTime(player.getCurrentTime());
-          if (wasPlayingBeforeHide) startBackgroundKeepAlive();
+
+          // 백그라운드에서도 재생 유지 시도
+          if (wasPlayingBeforeHide) {
+            startBackgroundKeepAlive();
+          }
         }
       } catch {}
     } else {
       stopBackgroundKeepAlive();
+
       try {
         if (player && wasPlayingBeforeHide) {
           const state = player.getPlayerState();
@@ -334,10 +321,6 @@
         disablekb: 0,
         fs: 1,
         modestbranding: 1,
-
-        // ✅ (중요) 권장 화질 힌트
-        vq: preferredVQ,
-
         ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
       },
       events: {
@@ -349,13 +332,10 @@
   };
 
   function onReady() {
+    // 이어보기 시도 (3번 정도 빠르게)
     fastApplyResumeSeek();
     setTimeout(fastApplyResumeSeek, 200);
     setTimeout(fastApplyResumeSeek, 600);
-
-    // ✅ 최고화질 유도 (초반 burst)
-    tryForceBestQuality();
-    burstForceQuality();
 
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
@@ -374,9 +354,6 @@
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
         fastApplyResumeSeek();
         wasPlayingBeforeHide = true;
-
-        // ✅ 재생/버퍼링 때마다 한 번 더 최고화질 유도
-        tryForceBestQuality();
       }
 
       if (e.data === YT.PlayerState.ENDED) {
@@ -387,6 +364,7 @@
       if (e.data === YT.PlayerState.PAUSED) {
         saveResumeTime(player.getCurrentTime());
 
+        // 백그라운드에서 갑자기 멈췄으면 재생 시도
         if (isPageHidden && wasPlayingBeforeHide) {
           setTimeout(() => {
             try {
@@ -401,6 +379,7 @@
   }
 
   function onError(e) {
+    // ✅ 임베드 재생 불가 -> 부모(content.js)로 즉시 알림 (폴백 트리거)
     postToParent({
       type: "GYS_EMBED_ERROR",
       videoId: videoId,
