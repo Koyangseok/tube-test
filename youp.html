@@ -211,22 +211,6 @@
 
   let player = null;
   let saveTimer = null;
-  let didSeekResume = false;
-
-  function fastApplyResumeSeek() {
-    if (!resumeEnabled) return;
-    if (didSeekResume) return;
-    if (initialStart <= 0) return;
-
-    try {
-      const dur = player?.getDuration?.() ?? 0;
-      if (dur > 0) {
-        player.seekTo(initialStart, true);
-        didSeekResume = true;
-        toast(`이어보기: ${Math.floor(initialStart)}초부터 재생`);
-      }
-    } catch {}
-  }
 
   // =========================
   // ✅ 백그라운드 유지 시도
@@ -313,10 +297,10 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,
+        autoplay: 1,                 // ✅ 유지
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart),
+        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
         controls: 1,
         disablekb: 0,
         fs: 1,
@@ -332,10 +316,7 @@
   };
 
   function onReady() {
-    // 이어보기 시도 (3번 정도 빠르게)
-    fastApplyResumeSeek();
-    setTimeout(fastApplyResumeSeek, 200);
-    setTimeout(fastApplyResumeSeek, 600);
+    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
 
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
@@ -352,7 +333,7 @@
   function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-        fastApplyResumeSeek();
+        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
       }
 
