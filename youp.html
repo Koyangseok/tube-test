@@ -7,6 +7,7 @@
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
     #playerWrap { width:100%; height:100%; }
+    #playerWrap iframe { width:100% !important; height:100% !important; }
     .error {
       position:fixed; inset:0;
       padding:16px;
@@ -293,8 +294,8 @@
   // =========================
   window.onYouTubeIframeAPIReady = function () {
     player = new YT.Player("playerWrap", {
-      width: "100%",
-      height: "100%",
+      width: "1920",   // ✅ YouTube에게 큰 화면이라고 알림
+      height: "1080",  // ✅ 실제 CSS로는 100%로 표시됨
       videoId: videoId,
       playerVars: {
         autoplay: 1,
