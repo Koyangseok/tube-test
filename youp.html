@@ -297,15 +297,14 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,
+        autoplay: 1,                 // ✅ 유지
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart),
+        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
         controls: 1,
         disablekb: 0,
         fs: 1,
         modestbranding: 1,
-        vq: 'hd1080',  // ✅ 화질 강제 (hd2160, hd1440, hd1080, hd720 등)
         ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
       },
       events: {
@@ -317,51 +316,15 @@
   };
 
   function onReady() {
-    // ✅ 최고화질 설정 (여러 방법 시도)
-    function setMaxQuality() {
-      try {
-        const available = player.getAvailableQualityLevels();
-        if (available && available.length > 0) {
-          // 사용 가능한 최고 화질 (배열 첫 번째)
-          player.setPlaybackQuality(available[0]);
-          
-          // 추가로 명시적 설정
-          if (available.includes('hd2160')) {
-            player.setPlaybackQuality('hd2160'); // 4K
-          } else if (available.includes('hd1440')) {
-            player.setPlaybackQuality('hd1440'); // 1440p
-          } else if (available.includes('hd1080')) {
-            player.setPlaybackQuality('hd1080'); // 1080p
-          } else if (available.includes('hd720')) {
-            player.setPlaybackQuality('hd720'); // 720p
-          }
-        }
-      } catch {}
-    }
+    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
 
-    // 즉시 설정
-    setMaxQuality();
-    
-    // 0.5초 후 재설정 (버퍼링 후)
-    setTimeout(setMaxQuality, 500);
-    
-    // 2초 후 재설정 (재생 시작 후)
-    setTimeout(setMaxQuality, 2000);
-
-    // ✅ 1.5초마다 시간 저장 + 화질 유지
+    // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
       try {
         if (!player) return;
         const state = player.getPlayerState();
         if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED || state === YT.PlayerState.BUFFERING) {
           saveResumeTime(player.getCurrentTime());
-          
-          // 화질이 자동으로 떨어지면 다시 최고화질로
-          const current = player.getPlaybackQuality();
-          const available = player.getAvailableQualityLevels();
-          if (available && available.length > 0 && current !== available[0]) {
-            player.setPlaybackQuality(available[0]);
-          }
         }
       } catch {}
     }, 1500);
@@ -401,20 +364,11 @@
     } catch {}
   }
 
-  function onStateChange(e) {
+function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
+        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
-        
-        // ✅ 재생 시작 시 최고화질로 재설정
-        setTimeout(() => {
-          try {
-            const available = player.getAvailableQualityLevels();
-            if (available && available.length > 0) {
-              player.setPlaybackQuality(available[0]);
-            }
-          } catch {}
-        }, 100);
       }
 
       if (e.data === YT.PlayerState.ENDED) {
