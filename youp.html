@@ -297,15 +297,18 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,                 // ✅ 유지
+        autoplay: 1,
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
+        start: Math.floor(initialStart),
         controls: 1,
         disablekb: 0,
         fs: 1,
         modestbranding: 1,
-        ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
+        vq: 'hd1080',
+        // ✅ 모바일에서도 고화질 시도
+        hl: 'en',  // 언어 설정
+        cc_load_policy: 0,  // 자막 off
       },
       events: {
         onReady,
@@ -316,15 +319,77 @@
   };
 
   function onReady() {
-    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
+    // ✅ 최고화질 설정 (모바일 강화)
+    function setMaxQuality() {
+      try {
+        const available = player.getAvailableQualityLevels();
+        const current = player.getPlaybackQuality();
+        
+        // 디버깅: 사용 가능한 화질 표시
+        toast(`가능: ${available.join(',')} / 현재: ${current}`, 3000);
+        
+        if (available && available.length > 0) {
+          // 사용 가능한 최고 화질 (배열 첫 번째)
+          const maxQuality = available[0];
+          player.setPlaybackQuality(maxQuality);
+          
+          // ✅ 명시적으로 고화질 시도
+          if (available.includes('hd2160')) {
+            player.setPlaybackQuality('hd2160');
+            toast('4K(2160p) 설정 시도', 2000);
+          } else if (available.includes('hd1440')) {
+            player.setPlaybackQuality('hd1440');
+            toast('1440p 설정 시도', 2000);
+          } else if (available.includes('hd1080')) {
+            player.setPlaybackQuality('hd1080');
+            toast('1080p 설정 시도', 2000);
+          } else if (available.includes('hd720')) {
+            player.setPlaybackQuality('hd720');
+            toast('720p 설정 시도', 2000);
+          } else {
+            toast(`최고화질: ${maxQuality}`, 2000);
+          }
+        }
+      } catch (e) {
+        toast('화질 설정 오류: ' + e.message, 3000);
+      }
+    }
 
-    // ✅ 1.5초마다 시간 저장
+    // 즉시 설정
+    setMaxQuality();
+    
+    // 0.5초 후 재설정 (버퍼링 후)
+    setTimeout(setMaxQuality, 500);
+    
+    // 2초 후 재설정 (재생 시작 후)
+    setTimeout(setMaxQuality, 2000);
+    
+    // ✅ 5초 후에도 한 번 더 (모바일용)
+    setTimeout(setMaxQuality, 5000);
+
+    // ✅ 1.5초마다 시간 저장 + 화질 유지
     saveTimer = setInterval(() => {
       try {
         if (!player) return;
         const state = player.getPlayerState();
         if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED || state === YT.PlayerState.BUFFERING) {
           saveResumeTime(player.getCurrentTime());
+          
+          // 화질이 자동으로 떨어지면 다시 최고화질로
+          const current = player.getPlaybackQuality();
+          const available = player.getAvailableQualityLevels();
+          if (available && available.length > 0) {
+            const max = available[0];
+            // ✅ 현재 화질이 최고가 아니고, 720p 미만이면 강제 상향
+            if (current !== max && 
+                current !== 'hd2160' && 
+                current !== 'hd1440' && 
+                current !== 'hd1080' && 
+                current !== 'hd720') {
+              player.setPlaybackQuality(max);
+              toast(`화질 복원: ${max}`, 1500);
+            }
+          }
         }
       } catch {}
     }, 1500);
@@ -364,11 +429,20 @@
     } catch {}
   }
 
-function onStateChange(e) {
+  function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
+        
+        // ✅ 재생 시작 시 최고화질로 재설정
+        setTimeout(() => {
+          try {
+            const available = player.getAvailableQualityLevels();
+            if (available && available.length > 0) {
+              player.setPlaybackQuality(available[0]);
+            }
+          } catch {}
+        }, 100);
       }
 
       if (e.data === YT.PlayerState.ENDED) {
