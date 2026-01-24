@@ -297,10 +297,10 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,                 // ✅ 유지
+        autoplay: 1,
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
+        start: Math.floor(initialStart),
         controls: 1,
         disablekb: 0,
         fs: 1,
@@ -316,7 +316,17 @@
   };
 
   function onReady() {
-    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
+    // ✅ 최고화질 설정
+    try {
+      // hd1080, hd720, large(480p), medium(360p), small(240p), tiny(144p)
+      player.setPlaybackQuality('hd1080');
+      
+      // 사용 가능한 최고 화질로 설정 (대체 방법)
+      const available = player.getAvailableQualityLevels();
+      if (available && available.length > 0) {
+        player.setPlaybackQuality(available[0]);
+      }
+    } catch {}
 
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
@@ -364,10 +374,9 @@
     } catch {}
   }
 
-function onStateChange(e) {
+  function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
       }
 
