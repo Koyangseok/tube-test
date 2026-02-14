@@ -213,20 +213,44 @@
   let saveTimer = null;
 
   // =========================
-  // ✅ 백그라운드 유지 시도
+  // ✅ 백그라운드 유지 시도 (강화)
   // =========================
   let isPageHidden = false;
   let wasPlayingBeforeHide = false;
   let backgroundKeepAliveTimer = null;
+  let audioContext = null;
+
+  // ✅ Web Audio API 활성화 (백그라운드 재생 개선)
+  function initAudioContext() {
+    try {
+      if (!audioContext) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
+      }
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+    } catch (e) {
+      console.log('AudioContext not available:', e);
+    }
+  }
 
   function startBackgroundKeepAlive() {
     stopBackgroundKeepAlive();
+
+    // AudioContext 활성화
+    initAudioContext();
 
     backgroundKeepAliveTimer = setInterval(() => {
       try {
         if (!player || !player.getPlayerState) return;
 
         const state = player.getPlayerState();
+
+        // AudioContext 계속 활성화
+        if (audioContext && audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
 
         // 일시정지면 재생 시도
         if (state === YT.PlayerState.PAUSED) {
@@ -238,7 +262,7 @@
           saveResumeTime(player.getCurrentTime());
         }
       } catch {}
-    }, 1000);
+    }, 500);  // 1000ms → 500ms (더 빠른 반응)
   }
 
   function stopBackgroundKeepAlive() {
@@ -247,6 +271,10 @@
       backgroundKeepAliveTimer = null;
     }
   }
+
+  // ✅ 사용자 인터랙션 시 AudioContext 활성화
+  document.addEventListener('click', initAudioContext, { once: true });
+  document.addEventListener('touchstart', initAudioContext, { once: true });
 
   document.addEventListener("visibilitychange", () => {
     isPageHidden = document.hidden;
@@ -262,6 +290,8 @@
 
           // 백그라운드에서도 재생 유지 시도
           if (wasPlayingBeforeHide) {
+            // ✅ 즉시 재생 시도
+            try { player.playVideo(); } catch {}
             startBackgroundKeepAlive();
           }
         }
@@ -410,19 +440,6 @@ function onStateChange(e) {
       "YouTube 오류 코드: <b>" + (e?.data ?? "unknown") + "</b><br><br>" +
       "원본 플레이어로 자동 복귀합니다.";
   }
-
-  // =========================
-  // 오디오 컨텍스트 유지 시도(일부 브라우저)
-  // =========================
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (AudioContext) {
-      const audioCtx = new AudioContext();
-      document.addEventListener("click", () => {
-        if (audioCtx.state === "suspended") audioCtx.resume();
-      }, { once: true });
-    }
-  } catch {}
 
 })();
 </script>
