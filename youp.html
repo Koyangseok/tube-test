@@ -297,10 +297,10 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,                 // ✅ 유지
+        autoplay: 1,
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
+        start: Math.floor(initialStart),
         controls: 1,
         disablekb: 0,
         fs: 1,
@@ -316,8 +316,6 @@
   };
 
   function onReady() {
-    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
-
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
       try {
@@ -330,44 +328,9 @@
     }, 1500);
   }
 
-  
-  // =========================
-  // ✅ 종료 후 추천영상 랜덤 자동재생 (Mix)
-  // =========================
-  function playRandomFromMix() {
-    try {
-      if (!player || !videoId) return;
-
-      // "RD+현재영상ID" = 유튜브가 자동 생성하는 추천 믹스
-      const mixId = "RD" + videoId;
-
-      // 믹스 로드
-      player.loadPlaylist({ listType: "playlist", list: mixId });
-
-      // 실제 리스트가 생성될 시간을 조금 준 뒤 랜덤 선택
-      setTimeout(() => {
-        try {
-          const list = (player.getPlaylist && player.getPlaylist()) || [];
-          if (list && list.length > 1) {
-            let idx = Math.floor(Math.random() * list.length);
-
-            // 0번이 원본일 가능성이 있어 피하고 싶으면 1번부터
-            if (idx === 0) idx = 1;
-
-            player.playVideoAt(idx);
-          } else {
-            // fallback: 다음 영상
-            if (player.nextVideo) player.nextVideo();
-          }
-        } catch {}
-      }, 700);
-    } catch {}
-  }
-
-function onStateChange(e) {
+  function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
       }
 
@@ -375,8 +338,11 @@ function onStateChange(e) {
         clearResumeTime();
         wasPlayingBeforeHide = false;
 
-        // ✅ 끝나면 추천영상 중 랜덤 1개 자동재생
-        playRandomFromMix();
+        // ✅ 부모(content.js)에 영상 종료 알림 -> 플레이리스트 다음 영상으로 이동
+        postToParent({
+          type: "GYS_VIDEO_ENDED",
+          videoId: videoId,
+        });
       }
 
       if (e.data === YT.PlayerState.PAUSED) {
