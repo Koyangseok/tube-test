@@ -90,6 +90,14 @@
 
   function postToParent(payload) {
     try {
+      // ① bgWebView(서비스)에서 직접 로드된 경우 → AndroidBridge 직접 호출
+      if (window.AndroidBridge) {
+        if (payload.type === "GYS_TIME" && payload.videoId != null) {
+          AndroidBridge.notifyCurrentTime(String(payload.videoId), String(payload.time ?? 0));
+        }
+        return;
+      }
+      // ② inject.js iframe 안에서 로드된 경우 → 부모 window로 postMessage
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(payload, "*");
       }
@@ -148,6 +156,13 @@
   function loadResumeTime() {
     if (!resumeEnabled) return 0;
     try {
+      // bgWebView(서비스)에서 직접 로드된 경우 AndroidBridge에서 이어보기 시간 가져옴
+      if (window.AndroidBridge && AndroidBridge.getResumeTime) {
+        const v = AndroidBridge.getResumeTime(videoId);
+        const n = parseFloat(v);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      // inject.js iframe 안에서 로드된 경우 localStorage 사용
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return 0;
       const obj = JSON.parse(raw);
@@ -294,7 +309,7 @@
   // ✅ API Ready
   // =========================
   window.onYouTubeIframeAPIReady = function () {
-    player = new YT.Player("playerWrap", {
+    player = window.__gysPlayer = new YT.Player("playerWrap", {
       width: "100%",
       height: "100%",
       videoId: videoId,
