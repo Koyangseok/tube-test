@@ -90,14 +90,6 @@
 
   function postToParent(payload) {
     try {
-      // ① bgWebView(서비스)에서 직접 로드된 경우 → AndroidBridge 직접 호출
-      if (window.AndroidBridge) {
-        if (payload.type === "GYS_TIME" && payload.videoId != null) {
-          AndroidBridge.notifyCurrentTime(String(payload.videoId), String(payload.time ?? 0));
-        }
-        return;
-      }
-      // ② inject.js iframe 안에서 로드된 경우 → 부모 window로 postMessage
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(payload, "*");
       }
@@ -156,13 +148,6 @@
   function loadResumeTime() {
     if (!resumeEnabled) return 0;
     try {
-      // bgWebView(서비스)에서 직접 로드된 경우 AndroidBridge에서 이어보기 시간 가져옴
-      if (window.AndroidBridge && AndroidBridge.getResumeTime) {
-        const v = AndroidBridge.getResumeTime(videoId);
-        const n = parseFloat(v);
-        if (Number.isFinite(n) && n > 0) return n;
-      }
-      // inject.js iframe 안에서 로드된 경우 localStorage 사용
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return 0;
       const obj = JSON.parse(raw);
@@ -175,8 +160,6 @@
   }
 
   let lastSavedSec = 0;
-  let lastKnownTime = 0;   // ✅ seek 감지용: 이전 프레임 시간
-  let isSeeking = false;   // ✅ seek 중복 방지
 
   function saveResumeTime(seconds) {
     if (!resumeEnabled) return;
@@ -193,7 +176,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ t, ts: Date.now() }));
     } catch {}
 
-    // ✅ 부모(inject.js)로 현재 시간 전송
+    // ✅ 부모(content.js)로 현재 시간 전송
     postToParent({
       type: "GYS_TIME",
       videoId,
@@ -309,20 +292,19 @@
   // ✅ API Ready
   // =========================
   window.onYouTubeIframeAPIReady = function () {
-    player = window.__gysPlayer = new YT.Player("playerWrap", {
+    player = new YT.Player("playerWrap", {
       width: "100%",
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,
+        autoplay: 1,                 // ✅ 유지
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart),
+        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
         controls: 1,
         disablekb: 0,
         fs: 1,
         modestbranding: 1,
-        vq: 'hd1080',   // 최고 화질 요청
         ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
       },
       events: {
@@ -334,6 +316,8 @@
   };
 
   function onReady() {
+    // ✅ (중요) 여기서 seekTo 반복을 하지 않음 -> 버벅거림 제거
+
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
       try {
@@ -383,49 +367,20 @@
 function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
+        // ✅ (중요) 재생 상태에서도 seekTo 반복을 하지 않음
         wasPlayingBeforeHide = true;
-
-
-        // ✅ PAUSED → PLAYING 전환 시 seek 감지
-        //    seek하면 잠깐 PAUSED가 됐다가 PLAYING으로 돌아옴
-        //    이 때 시간 차이가 2초 이상이면 seek로 판단
-        if (isSeeking) {
-          isSeeking = false;
-          try {
-            const t = Math.floor(player.getCurrentTime());
-            if (Math.abs(t - lastKnownTime) > 2) {
-              lastKnownTime = t;
-              saveResumeTime(t);
-              // ✅ 백그라운드 WebView에도 즉시 seek 알림
-              postToParent({ type: "GYS_SEEK", videoId, time: t });
-            }
-          } catch {}
-        } else {
-          // 일반 재생 중 시간 업데이트
-          try { lastKnownTime = Math.floor(player.getCurrentTime()); } catch {}
-        }
       }
 
       if (e.data === YT.PlayerState.ENDED) {
         clearResumeTime();
         wasPlayingBeforeHide = false;
+
+        // ✅ 끝나면 추천영상 중 랜덤 1개 자동재생
         playRandomFromMix();
       }
 
       if (e.data === YT.PlayerState.PAUSED) {
-        // ✅ 일시정지 시 seek 플래그 세팅 (seek는 잠깐 PAUSED → PLAYING)
-        isSeeking = true;
-        const currentT = Math.floor(player.getCurrentTime());
-        saveResumeTime(currentT);
-
-        // ✅ 300ms 후에도 여전히 PAUSED면 → 실제 일시정지 (seek 아님)
-        setTimeout(() => {
-          try {
-            if (player && player.getPlayerState() === YT.PlayerState.PAUSED) {
-              isSeeking = false;
-            }
-          } catch {}
-        }, 300);
+        saveResumeTime(player.getCurrentTime());
 
         // 백그라운드에서 갑자기 멈췄으면 재생 시도
         if (isPageHidden && wasPlayingBeforeHide) {
