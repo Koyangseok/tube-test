@@ -314,14 +314,15 @@
       height: "100%",
       videoId: videoId,
       playerVars: {
-        autoplay: 1,                 // ✅ 유지
+        autoplay: 1,
         playsinline: 1,
         rel: rel,
-        start: Math.floor(initialStart), // ✅ 이어보기 시작점을 처음부터 적용
+        start: Math.floor(initialStart),
         controls: 1,
         disablekb: 0,
         fs: 1,
         modestbranding: 1,
+        vq: 'hd1080',   // 최고 화질 요청
         ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
       },
       events: {
@@ -333,14 +334,6 @@
   };
 
   function onReady() {
-    // 최고 화질로 설정 (hd1080 → hd720 → large 순으로 fallback)
-    try {
-      const levels = player.getAvailableQualityLevels();
-      const preferred = ["highres", "hd2160", "hd1440", "hd1080", "hd720", "large"];
-      const best = preferred.find(q => levels.includes(q));
-      if (best) player.setPlaybackQuality(best);
-    } catch(e) {}
-
     // ✅ 1.5초마다 시간 저장
     saveTimer = setInterval(() => {
       try {
@@ -391,13 +384,7 @@ function onStateChange(e) {
     try {
       if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
         wasPlayingBeforeHide = true;
-        // 재생 시작/버퍼링마다 최고 화질 재적용 (자동 화질 조정 방지)
-        try {
-          const levels = player.getAvailableQualityLevels();
-          const preferred = ["highres", "hd2160", "hd1440", "hd1080", "hd720", "large"];
-          const best = preferred.find(q => levels.includes(q));
-          if (best && player.getPlaybackQuality() !== best) player.setPlaybackQuality(best);
-        } catch(e) {}
+
 
         // ✅ PAUSED → PLAYING 전환 시 seek 감지
         //    seek하면 잠깐 PAUSED가 됐다가 PLAYING으로 돌아옴
