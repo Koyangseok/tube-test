@@ -282,6 +282,19 @@
     }
   });
 
+  // ✅ 앱 복귀 시 MainActivity에서 seek 명령 수신
+  window.addEventListener("message", (ev) => {
+    try {
+      const data = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data;
+      if (data?.type === "GYS_CMD" && data.cmd === "seekTo") {
+        const t = Number(data.time);
+        if (Number.isFinite(t) && t >= 0 && player && player.seekTo) {
+          player.seekTo(t, true);
+        }
+      }
+    } catch {}
+  });
+
   window.addEventListener("pagehide", () => {
     try { if (player) saveResumeTime(player.getCurrentTime()); } catch {}
   });
