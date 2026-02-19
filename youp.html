@@ -145,6 +145,8 @@
   // =========================
   const STORAGE_KEY = `YT_RESUME_${videoId}`;
 
+  const RESUME_EXPIRE_MS = 60 * 60 * 1000; // 1시간
+
   function loadResumeTime() {
     if (!resumeEnabled) return 0;
     try {
@@ -153,6 +155,12 @@
       const obj = JSON.parse(raw);
       const t = Number(obj?.t ?? 0);
       if (!Number.isFinite(t) || t < 0) return 0;
+      // 저장된 지 1시간이 지났으면 삭제 후 무시
+      const ts = Number(obj?.ts ?? 0);
+      if (Date.now() - ts > RESUME_EXPIRE_MS) {
+        clearResumeTime();
+        return 0;
+      }
       return t;
     } catch {
       return 0;
