@@ -212,74 +212,6 @@
   let player = null;
   let saveTimer = null;
 
-  // =========================
-  // ✅ 백그라운드 유지 시도
-  // =========================
-  let isPageHidden = false;
-  let wasPlayingBeforeHide = false;
-  let backgroundKeepAliveTimer = null;
-
-  function startBackgroundKeepAlive() {
-    stopBackgroundKeepAlive();
-
-    backgroundKeepAliveTimer = setInterval(() => {
-      try {
-        if (!player || !player.getPlayerState) return;
-
-        const state = player.getPlayerState();
-
-        // 일시정지면 재생 시도
-        if (state === YT.PlayerState.PAUSED) {
-          player.playVideo();
-        }
-
-        // 재생 중이면 시간 저장
-        if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
-          saveResumeTime(player.getCurrentTime());
-        }
-      } catch {}
-    }, 1000);
-  }
-
-  function stopBackgroundKeepAlive() {
-    if (backgroundKeepAliveTimer) {
-      clearInterval(backgroundKeepAliveTimer);
-      backgroundKeepAliveTimer = null;
-    }
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    isPageHidden = document.hidden;
-
-    if (isPageHidden) {
-      try {
-        if (player && player.getPlayerState) {
-          const state = player.getPlayerState();
-          wasPlayingBeforeHide = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
-
-          // 현재 시간 저장
-          saveResumeTime(player.getCurrentTime());
-
-          // 백그라운드에서도 재생 유지 시도
-          if (wasPlayingBeforeHide) {
-            startBackgroundKeepAlive();
-          }
-        }
-      } catch {}
-    } else {
-      stopBackgroundKeepAlive();
-
-      try {
-        if (player && wasPlayingBeforeHide) {
-          const state = player.getPlayerState();
-          if (state === YT.PlayerState.PAUSED || state === YT.PlayerState.CUED) {
-            player.playVideo();
-          }
-        }
-      } catch {}
-    }
-  });
-
   window.addEventListener("pagehide", () => {
     try { if (player) saveResumeTime(player.getCurrentTime()); } catch {}
   });
@@ -330,13 +262,8 @@
 
   function onStateChange(e) {
     try {
-      if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-        wasPlayingBeforeHide = true;
-      }
-
       if (e.data === YT.PlayerState.ENDED) {
         clearResumeTime();
-        wasPlayingBeforeHide = false;
 
         // ✅ 부모(content.js)에 영상 종료 알림 -> 플레이리스트 다음 영상으로 이동
         postToParent({
@@ -347,17 +274,6 @@
 
       if (e.data === YT.PlayerState.PAUSED) {
         saveResumeTime(player.getCurrentTime());
-
-        // 백그라운드에서 갑자기 멈췄으면 재생 시도
-        if (isPageHidden && wasPlayingBeforeHide) {
-          setTimeout(() => {
-            try {
-              if (player && player.getPlayerState() === YT.PlayerState.PAUSED) {
-                player.playVideo();
-              }
-            } catch {}
-          }, 120);
-        }
       }
     } catch {}
   }
