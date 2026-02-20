@@ -31,109 +31,9 @@
       user-select:none;
       white-space: nowrap;
     }
-
-    /* ============================
-       비밀번호 오버레이
-    ============================ */
-    #pwOverlay {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      font-family: 'Segoe UI', Arial, system-ui, sans-serif;
-    }
-    #pwBox {
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 14px;
-      padding: 36px 32px 28px;
-      width: 320px;
-      max-width: 90vw;
-      text-align: center;
-      box-shadow: 0 8px 40px rgba(0,0,0,.8);
-    }
-    #pwBox .lock-icon {
-      font-size: 40px;
-      margin-bottom: 14px;
-    }
-    #pwBox h2 {
-      margin: 0 0 6px;
-      font-size: 18px;
-      color: #fff;
-      font-weight: 600;
-    }
-    #pwBox p {
-      margin: 0 0 22px;
-      font-size: 13px;
-      color: #777;
-    }
-    #pwInput {
-      width: 100%;
-      box-sizing: border-box;
-      background: #1a1a1a;
-      border: 1px solid #444;
-      border-radius: 8px;
-      color: #fff;
-      font-size: 16px;
-      padding: 11px 14px;
-      outline: none;
-      transition: border-color .2s;
-      letter-spacing: 2px;
-    }
-    #pwInput:focus {
-      border-color: #9bd0ff;
-    }
-    #pwInput.shake {
-      animation: shake .35s ease;
-      border-color: #ff5555 !important;
-    }
-    @keyframes shake {
-      0%,100%{ transform:translateX(0) }
-      20%    { transform:translateX(-8px) }
-      40%    { transform:translateX(8px) }
-      60%    { transform:translateX(-6px) }
-      80%    { transform:translateX(5px) }
-    }
-    #pwBtn {
-      margin-top: 14px;
-      width: 100%;
-      background: #9bd0ff;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 700;
-      padding: 11px;
-      cursor: pointer;
-      transition: background .15s, transform .1s;
-    }
-    #pwBtn:hover { background: #b8dbff; }
-    #pwBtn:active { transform: scale(.97); }
-    #pwErr {
-      margin-top: 10px;
-      font-size: 13px;
-      color: #ff5555;
-      min-height: 18px;
-    }
   </style>
 </head>
 <body>
-
-  <!-- 비밀번호 오버레이 -->
-  <div id="pwOverlay">
-    <div id="pwBox">
-      <div class="lock-icon">🔒</div>
-      <h2>비밀번호 입력</h2>
-      <p>영상을 재생하려면 비밀번호를 입력하세요.</p>
-      <input type="password" id="pwInput" placeholder="비밀번호" autocomplete="current-password" />
-      <button id="pwBtn">확인</button>
-      <div id="pwErr"></div>
-    </div>
-  </div>
-
   <div id="playerWrap"></div>
   <div class="error" id="err" style="display:none;"></div>
   <div class="toast" id="toast"></div>
@@ -143,72 +43,9 @@
   "use strict";
 
   // =========================
-  // ✅ 비밀번호 설정 (여기서 변경하세요)
-  // =========================
-  const CORRECT_PASSWORD = "didtjr";          // ← 원하는 비밀번호로 변경
-  const PW_STORAGE_KEY   = "GYS_PW_AUTH";  // localStorage 키
-  const PW_EXPIRE_MS     = 30 * 24 * 60 * 60 * 1000; // 30일
-
-  // =========================
-  // 인증 확인 & UI 처리
-  // =========================
-  const pwOverlay = document.getElementById("pwOverlay");
-  const pwInput   = document.getElementById("pwInput");
-  const pwBtn     = document.getElementById("pwBtn");
-  const pwErr     = document.getElementById("pwErr");
-
-  function isAuthenticated() {
-    try {
-      const raw = localStorage.getItem(PW_STORAGE_KEY);
-      if (!raw) return false;
-      const obj = JSON.parse(raw);
-      if (!obj?.ok) return false;
-      if (Date.now() - Number(obj.ts ?? 0) > PW_EXPIRE_MS) {
-        localStorage.removeItem(PW_STORAGE_KEY);
-        return false;
-      }
-      return true;
-    } catch { return false; }
-  }
-
-  function saveAuth() {
-    try {
-      localStorage.setItem(PW_STORAGE_KEY, JSON.stringify({ ok: true, ts: Date.now() }));
-    } catch {}
-  }
-
-  function handlePwSubmit() {
-    const val = pwInput.value;
-    if (val === CORRECT_PASSWORD) {
-      saveAuth();
-      pwOverlay.style.display = "none";
-      initPlayer(); // 플레이어 초기화 시작
-    } else {
-      pwErr.textContent = "비밀번호가 올바르지 않습니다.";
-      pwInput.classList.remove("shake");
-      void pwInput.offsetWidth; // reflow
-      pwInput.classList.add("shake");
-      pwInput.value = "";
-      pwInput.focus();
-      setTimeout(() => pwInput.classList.remove("shake"), 400);
-    }
-  }
-
-  pwBtn.addEventListener("click", handlePwSubmit);
-  pwInput.addEventListener("keydown", e => { if (e.key === "Enter") handlePwSubmit(); });
-
-  // 이미 인증된 경우 바로 통과
-  if (isAuthenticated()) {
-    pwOverlay.style.display = "none";
-    initPlayer();
-  } else {
-    setTimeout(() => pwInput.focus(), 100);
-  }
-
-  // =========================
   // helpers
   // =========================
-  const errEl   = document.getElementById("err");
+  const errEl = document.getElementById("err");
   const toastEl = document.getElementById("toast");
 
   function toast(msg, ms=1400) {
@@ -226,177 +63,256 @@
   function extractIdFromUrl(urlStr) {
     try {
       const u = new URL(urlStr);
+
+      // youtu.be/ID
       if (u.hostname.includes("youtu.be")) {
         const id = u.pathname.split("/").filter(Boolean)[0];
         return id || null;
       }
+
+      // watch?v=ID
       const v = u.searchParams.get("v");
       if (v) return v;
+
+      // /shorts/ID
       const shorts = u.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
       if (shorts) return shorts[1];
+
+      // /embed/ID
       const embed = u.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
       if (embed) return embed[1];
+
       return null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   function postToParent(payload) {
     try {
-      if (window.parent && window.parent !== window)
+      if (window.parent && window.parent !== window) {
         window.parent.postMessage(payload, "*");
-    } catch {}
-  }
-
-  // =========================
-  // 플레이어 초기화 (인증 후 호출)
-  // =========================
-  function initPlayer() {
-
-    // params parse
-    const params = new URLSearchParams(location.search);
-    let videoId = params.get("v");
-
-    const urlParam = params.get("url");
-    if (!videoId && urlParam) videoId = extractIdFromUrl(urlParam);
-
-    if (!videoId) {
-      const raw = location.search.startsWith("?") ? location.search.slice(1) : "";
-      if (raw.startsWith("http")) videoId = extractIdFromUrl(raw.split("&")[0]);
-    }
-
-    const start = Math.max(0, getInt(params.get("start"), 0));
-    const end   = Math.max(0, getInt(params.get("end"),   0));
-    let rel = params.get("rel") ?? "0";
-    if (typeof rel === "string" && rel.includes("^")) rel = rel.split("^")[0];
-    rel = (rel === "1") ? "1" : "0";
-    const resumeEnabled = (params.get("resume") ?? "1") !== "0";
-
-    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-      errEl.style.display = "block";
-      errEl.innerHTML =
-        "영상 ID를 읽지 못했습니다.<br><br>" +
-        "✅ 새 주소 형식(추천):<br>" +
-        "<b>/youp.html?v=영상ID&start=0&end=0&rel=0</b><br><br>" +
-        "✅ 예전 주소도 지원됨:<br>" +
-        "<b>/youp.html?https://youtu.be/영상ID</b>";
-      return;
-    }
-
-    const safeEnd = (end > start) ? end : 0;
-
-    // 이어보기
-    const STORAGE_KEY    = `YT_RESUME_${videoId}`;
-    const RESUME_EXPIRE_MS = 60 * 60 * 1000; // 1시간
-
-    function loadResumeTime() {
-      if (!resumeEnabled) return 0;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return 0;
-        const obj = JSON.parse(raw);
-        const t = Number(obj?.t ?? 0);
-        if (!Number.isFinite(t) || t < 0) return 0;
-        const ts = Number(obj?.ts ?? 0);
-        if (Date.now() - ts > RESUME_EXPIRE_MS) { clearResumeTime(); return 0; }
-        return t;
-      } catch { return 0; }
-    }
-
-    let lastSavedSec = 0;
-
-    function saveResumeTime(seconds) {
-      if (!resumeEnabled) return;
-      const t = Math.floor(Number(seconds));
-      if (!Number.isFinite(t) || t < 0) return;
-      if (t < 2) return;
-      if (Math.abs(t - lastSavedSec) < 1) return;
-      lastSavedSec = t;
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ t, ts: Date.now() })); } catch {}
-      postToParent({ type: "GYS_TIME", videoId, time: t });
-    }
-
-    function clearResumeTime() {
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
-    }
-
-    let resumeTime = loadResumeTime();
-    if (safeEnd && resumeTime >= safeEnd - 1) { resumeTime = 0; clearResumeTime(); }
-
-    let initialStart = start;
-    if (resumeEnabled && resumeTime > start + 1) initialStart = resumeTime;
-
-    // YouTube IFrame API
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(tag);
-
-    let player   = null;
-    let saveTimer = null;
-
-    window.addEventListener("pagehide",      () => { try { if (player) saveResumeTime(player.getCurrentTime()); } catch {} });
-    window.addEventListener("beforeunload",  () => { try { if (player) saveResumeTime(player.getCurrentTime()); } catch {} });
-
-    window.onYouTubeIframeAPIReady = function () {
-      player = new YT.Player("playerWrap", {
-        width: "100%",
-        height: "100%",
-        videoId,
-        playerVars: {
-          autoplay: 1,
-          playsinline: 1,
-          rel,
-          start: Math.floor(initialStart),
-          controls: 1,
-          disablekb: 0,
-          fs: 1,
-          modestbranding: 1,
-          ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
-        },
-        events: { onReady, onStateChange, onError },
-      });
-    };
-
-    function onReady() {
-      saveTimer = setInterval(() => {
-        try {
-          if (!player) return;
-          const state = player.getPlayerState();
-          if ([YT.PlayerState.PLAYING, YT.PlayerState.PAUSED, YT.PlayerState.BUFFERING].includes(state))
-            saveResumeTime(player.getCurrentTime());
-        } catch {}
-      }, 1500);
-    }
-
-    function onStateChange(e) {
-      try {
-        if (e.data === YT.PlayerState.ENDED) {
-          clearResumeTime();
-          postToParent({ type: "GYS_VIDEO_ENDED", videoId });
-        }
-        if (e.data === YT.PlayerState.PAUSED) saveResumeTime(player.getCurrentTime());
-      } catch {}
-    }
-
-    function onError(e) {
-      postToParent({ type: "GYS_EMBED_ERROR", videoId, code: e?.data ?? "unknown" });
-      errEl.style.display = "block";
-      errEl.innerHTML =
-        "이 영상은 임베드로 재생이 제한되었거나 오류가 발생했습니다.<br><br>" +
-        "YouTube 오류 코드: <b>" + (e?.data ?? "unknown") + "</b><br><br>" +
-        "원본 플레이어로 자동 복귀합니다.";
-    }
-
-    // 오디오 컨텍스트 유지
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        const audioCtx = new AudioContext();
-        document.addEventListener("click", () => {
-          if (audioCtx.state === "suspended") audioCtx.resume();
-        }, { once: true });
       }
     } catch {}
   }
+
+  // =========================
+  // params parse
+  // =========================
+  const params = new URLSearchParams(location.search);
+
+  let videoId = params.get("v");
+
+  // ?url=https://youtu.be/... 지원
+  const urlParam = params.get("url");
+  if (!videoId && urlParam) {
+    videoId = extractIdFromUrl(urlParam);
+  }
+
+  // 예전 방식: ?https://youtu.be/ID
+  if (!videoId) {
+    const raw = location.search.startsWith("?") ? location.search.slice(1) : "";
+    if (raw.startsWith("http")) {
+      const onlyUrl = raw.split("&")[0];
+      videoId = extractIdFromUrl(onlyUrl);
+    }
+  }
+
+  const start = Math.max(0, getInt(params.get("start"), 0));
+  const end = Math.max(0, getInt(params.get("end"), 0));
+  let rel = params.get("rel") ?? "0";
+
+  if (typeof rel === "string" && rel.includes("^")) rel = rel.split("^")[0];
+  rel = (rel === "1") ? "1" : "0";
+
+  const resumeEnabled = (params.get("resume") ?? "1") !== "0";
+
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    errEl.style.display = "block";
+    errEl.innerHTML =
+      "영상 ID를 읽지 못했습니다.<br><br>" +
+      "✅ 새 주소 형식(추천):<br>" +
+      "<b>/youp.html?v=영상ID&start=0&end=0&rel=0</b><br><br>" +
+      "✅ 예전 주소도 지원됨:<br>" +
+      "<b>/youp.html?https://youtu.be/영상ID</b>";
+    throw new Error("Invalid video id");
+  }
+
+  const safeEnd = (end > start) ? end : 0;
+
+  // =========================
+  // ✅ 이어보기 저장/복원
+  // =========================
+  const STORAGE_KEY = `YT_RESUME_${videoId}`;
+
+  const RESUME_EXPIRE_MS = 60 * 1000; // 1시간
+
+  function loadResumeTime() {
+    if (!resumeEnabled) return 0;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return 0;
+      const obj = JSON.parse(raw);
+      const t = Number(obj?.t ?? 0);
+      if (!Number.isFinite(t) || t < 0) return 0;
+      // 저장된 지 1시간이 지났으면 삭제 후 무시
+      const ts = Number(obj?.ts ?? 0);
+      if (Date.now() - ts > RESUME_EXPIRE_MS) {
+        clearResumeTime();
+        return 0;
+      }
+      return t;
+    } catch {
+      return 0;
+    }
+  }
+
+  let lastSavedSec = 0;
+
+  function saveResumeTime(seconds) {
+    if (!resumeEnabled) return;
+
+    const t = Math.floor(Number(seconds));
+    if (!Number.isFinite(t) || t < 0) return;
+
+    // 너무 초반 값은 저장 안함
+    if (t < 2) return;
+    if (Math.abs(t - lastSavedSec) < 1) return;
+    lastSavedSec = t;
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ t, ts: Date.now() }));
+    } catch {}
+
+    // ✅ 부모(content.js)로 현재 시간 전송
+    postToParent({
+      type: "GYS_TIME",
+      videoId,
+      time: t
+    });
+  }
+
+  function clearResumeTime() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  }
+
+  let resumeTime = loadResumeTime();
+
+  // end 구간이면 이어보기 초기화
+  if (safeEnd && resumeTime >= safeEnd - 1) {
+    resumeTime = 0;
+    clearResumeTime();
+  }
+
+  // 실제 시작점 결정
+  let initialStart = start;
+  if (resumeEnabled && resumeTime > start + 1) {
+    initialStart = resumeTime;
+  }
+
+  // =========================
+  // ✅ YouTube IFrame API
+  // =========================
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+
+  let player = null;
+  let saveTimer = null;
+
+  window.addEventListener("pagehide", () => {
+    try { if (player) saveResumeTime(player.getCurrentTime()); } catch {}
+  });
+
+  window.addEventListener("beforeunload", () => {
+    try { if (player) saveResumeTime(player.getCurrentTime()); } catch {}
+  });
+
+  // =========================
+  // ✅ API Ready
+  // =========================
+  window.onYouTubeIframeAPIReady = function () {
+    player = new YT.Player("playerWrap", {
+      width: "100%",
+      height: "100%",
+      videoId: videoId,
+      playerVars: {
+        autoplay: 1,
+        playsinline: 1,
+        rel: rel,
+        start: Math.floor(initialStart),
+        controls: 1,
+        disablekb: 0,
+        fs: 1,
+        modestbranding: 1,
+        ...(safeEnd ? { end: Math.floor(safeEnd) } : {}),
+      },
+      events: {
+        onReady,
+        onStateChange,
+        onError,
+      },
+    });
+  };
+
+  function onReady() {
+    // ✅ 1.5초마다 시간 저장
+    saveTimer = setInterval(() => {
+      try {
+        if (!player) return;
+        const state = player.getPlayerState();
+        if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED || state === YT.PlayerState.BUFFERING) {
+          saveResumeTime(player.getCurrentTime());
+        }
+      } catch {}
+    }, 1500);
+  }
+
+  function onStateChange(e) {
+    try {
+      if (e.data === YT.PlayerState.ENDED) {
+        clearResumeTime();
+
+        // ✅ 부모(content.js)에 영상 종료 알림 -> 플레이리스트 다음 영상으로 이동
+        postToParent({
+          type: "GYS_VIDEO_ENDED",
+          videoId: videoId,
+        });
+      }
+
+      if (e.data === YT.PlayerState.PAUSED) {
+        saveResumeTime(player.getCurrentTime());
+      }
+    } catch {}
+  }
+
+  function onError(e) {
+    // ✅ 임베드 재생 불가 -> 부모(content.js)로 즉시 알림 (폴백 트리거)
+    postToParent({
+      type: "GYS_EMBED_ERROR",
+      videoId: videoId,
+      code: e?.data ?? "unknown",
+    });
+
+    errEl.style.display = "block";
+    errEl.innerHTML =
+      "이 영상은 임베드로 재생이 제한되었거나 오류가 발생했습니다.<br><br>" +
+      "YouTube 오류 코드: <b>" + (e?.data ?? "unknown") + "</b><br><br>" +
+      "원본 플레이어로 자동 복귀합니다.";
+  }
+
+  // =========================
+  // 오디오 컨텍스트 유지 시도(일부 브라우저)
+  // =========================
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      const audioCtx = new AudioContext();
+      document.addEventListener("click", () => {
+        if (audioCtx.state === "suspended") audioCtx.resume();
+      }, { once: true });
+    }
+  } catch {}
 
 })();
 </script>
